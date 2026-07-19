@@ -1,0 +1,16 @@
+{
+  "gui.minecraftcapes.title": "MinecraftCapes",
+  "key.minecraftcapes.gui": "Abrir GUI",
+  "key.category.minecraftcapes.gui": "MinecraftCapes",
+  "gui.minecraftcapes.tab.general": "General",
+  "gui.minecraftcapes.tab.options": "Opciones",
+  "gui.minecraftcapes.tab.links": "Enlaces",
+  "button.minecraftcapes.open_website": "Abrir sitio web",
+  "button.minecraftcapes.reload_profile": "Recargar perfil",
+  "button.minecraftcapes.reload_all": "Recargar todo",
+  "button.minecraftcapes.cape_visible": "Capa visible",
+  "button.minecraftcapes.ears_visible": "Orejas visibles",
+  "button.minecraftcapes.discord": "Discord",
+  "button.minecraftcapes.github": "GitHub",
+  "button.minecraftcapes.website": "MinecraftCapes.net"
+}
