@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MinecraftCapes Designer</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        :root {
+            --bg: #0c0c10;
+            --panel: #14141c;
+            --border: rgba(255,255,255,0.08);
+            --text: #f3f4f6;
+            --text-dim: #9ca3af;
+            --accent: #3b82f6;
+            --accent-glow: rgba(59,130,246,0.3);
+            --radius: 8px;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            height: 100vh; display: flex; flex-direction: column; overflow: hidden;
+            background-image:
+                radial-gradient(at 0% 0%, rgba(59,130,246,0.12) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(147,51,234,0.12) 0px, transparent 50%);
+        }
+        header {
+            height: 52px; display: flex; align-items: center; justify-content: space-between;
+            padding: 0 20px; border-bottom: 1px solid var(--border);
+            background: rgba(12,12,16,0.8); backdrop-filter: blur(10px); z-index: 100;
+        }
+        .logo { font-weight: 700; font-size: 1.2rem; display: flex; align-items: center; gap: 10px; }
+        .logo-box { width: 12px; height: 20px; border-radius: 3px; background: linear-gradient(135deg, #3b82f6, #a855f7); box-shadow: 0 0 8px var(--accent-glow); }
+        .actions-header { display: flex; gap: 8px; }
+        .btn {
+            background: rgba(255,255,255,0.05); border: 1px solid var(--border); color: var(--text);
+            padding: 7px 14px; border-radius: 6px; font-weight: 500; cursor: pointer;
+            transition: all 0.15s; font-size: 0.82rem; display: flex; align-items: center; gap: 6px;
+            font-family: inherit;
+        }
+        .btn:hover { background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.15); }
+        .btn-primary { background: linear-gradient(135deg,#3b82f6,#2563eb); border: none; box-shadow: 0 2px 8px rgba(37,99,235,0.3); }
+        .btn-primary:hover { background: linear-gradient(135deg,#4f46e5,#3b82f6); box-shadow: 0 4px 12px rgba(37,99,235,0.4); }
+        .btn-sm { padding: 5px 10px; font-size: 0.75rem; }
+        .btn-icon { width: 32px; height: 32px; padding: 0; justify-content: center; }
+        .main-container { flex: 1; display: flex; overflow: hidden; }
+        .sidebar {
+            width: 220px; background: var(--panel); backdrop-filter: blur(16px);
+            border-right: 1px solid var(--border); display: flex; flex-direction: column;
+            padding: 16px; gap: 16px; overflow-y: auto; flex-shrink: 0;
+        }
+        .sidebar-right { border-right: none; border-left: 1px solid var(--border); width: 260px; }
+        .section-title { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-dim); margin-bottom: 8px; font-weight: 600; }
+        .tool-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+        .tool-btn {
+            background: rgba(255,255,255,0.03); border: 1px solid var(--border); color: var(--text-dim);
+            border-radius: 6px; height: 38px; display: flex; align-items: center; justify-content: center;
+            gap: 6px; font-weight: 500; cursor: pointer; transition: all 0.15s; font-size: 0.78rem; font-family: inherit;
+        }
+        .tool-btn:hover { background: rgba(255,255,255,0.08); color: var(--text); }
+        .tool-btn.active { background: rgba(59,130,246,0.15); border-color: var(--accent); color: #60a5fa; box-shadow: inset 0 0 8px rgba(59,130,246,0.1); }
+        .swatch-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; }
+        .swatch { aspect-ratio: 1; border-radius: 3px; cursor: pointer; border: 1.5px solid transparent; transition: transform 0.1s, border-color 0.15s; }
+        .swatch:hover { transform: scale(1.15); z-index: 2; }
+        .swatch.selected { border-color: #fff; box-shadow: 0 0 6px rgba(255,255,255,0.5); transform: scale(1.1); }
+        .color-row { display: flex; align-items: center; gap: 8px; background: rgba(255,255,255,0.03); border: 1px solid var(--border); padding: 8px; border-radius: 6px; }
+        .color-preview { width: 28px; height: 28px; border-radius: 4px; border: 1px solid rgba(0,0,0,0.3); cursor: pointer; position: relative; overflow: hidden; flex-shrink: 0; }
+        .color-preview input[type="color"] { position: absolute; top: -6px; left: -6px; width: 44px; height: 44px; cursor: pointer; opacity: 0; }
+        .hex-display { font-family: monospace; font-size: 0.85rem; color: var(--text-dim); flex: 1; }
+        .editor-area { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 16px; position: relative; }
+        .canvas-wrap { position: relative; border-radius: 6px; overflow: hidden; border: 1.5px solid var(--border); background: #18181f; box-shadow: 0 12px 36px rgba(0,0,0,0.4); }
+        canvas#editor-canvas { display: block; image-rendering: pixelated; cursor: crosshair; }
+        .canvas-controls { margin-top: 12px; display: flex; gap: 6px; background: rgba(20,20,28,0.6); backdrop-filter: blur(8px); padding: 6px 12px; border-radius: 16px; border: 1px solid var(--border); }
+        .ctrl-btn { background: transparent; border: none; color: var(--text-dim); font-size: 0.9rem; cursor: pointer; padding: 4px 6px; transition: all 0.15s; border-radius: 4px; display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; }
+        .ctrl-btn:hover { color: var(--text); background: rgba(255,255,255,0.05); }
+        .ctrl-btn.active { color: var(--accent); background: rgba(59,130,246,0.1); }
+        .preview-box { flex: 1; display: flex; align-items: center; justify-content: center; border: 1px solid var(--border); border-radius: 8px; background: rgba(255,255,255,0.01); min-height: 220px; overflow: hidden; position: relative; }
+        .preview-box canvas { display: block; width: 100%; height: 100%; }
+        .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: rgba(20,20,25,0.92); backdrop-filter: blur(12px); border: 1px solid var(--border); padding: 10px 24px; border-radius: 20px; display: flex; align-items: center; gap: 10px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); transition: all 0.3s cubic-bezier(0.175,0.885,0.32,1.275); z-index: 1000; font-weight: 500; font-size: 0.85rem; opacity: 0; pointer-events: none; }
+        .toast.show { opacity: 1; pointer-events: auto; }
+        .toast-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+        .loading-overlay { position: absolute; inset: 0; background: rgba(12,12,16,0.85); display: flex; align-items: center; justify-content: center; border-radius: 8px; z-index: 5; font-weight: 500; color: var(--text-dim); transition: opacity 0.4s; pointer-events: none; gap: 10px; font-size: 0.85rem; }
+        .loading-overlay.hidden { opacity: 0; }
+        .spinner { width: 18px; height: 18px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .separator { width: 100%; height: 1px; background: var(--border); margin: 4px 0; }
+        .zoom-display { font-size: 0.7rem; color: var(--text-dim); min-width: 36px; text-align: center; font-variant-numeric: tabular-nums; }
+        .skin-row { display: flex; gap: 6px; align-items: center; }
+        .skin-row input { background: rgba(255,255,255,0.05); border: 1px solid var(--border); border-radius: 4px; padding: 4px 8px; color: var(--text); font-size: 0.75rem; outline: none; width: 90px; font-family: inherit; }
+        .skin-row input:focus { border-color: var(--accent); }
+        .skin-row input::placeholder { color: var(--text-dim); }
+        .preview-hint { position: absolute; bottom: 8px; left: 0; right: 0; text-align: center; pointer-events: none; font-size: 0.65rem; color: rgba(255,255,255,0.3); }
+        .mode-toggle { display: flex; gap: 4px; }
+        .mode-btn { background: rgba(255,255,255,0.03); border: 1px solid var(--border); color: var(--text-dim); padding: 4px 10px; border-radius: 4px; font-size: 0.7rem; cursor: pointer; font-family: inherit; font-weight: 500; transition: all 0.15s; }
+        .mode-btn:hover { color: var(--text); }
+        .mode-btn.active { background: rgba(16,185,129,0.15); border-color: #10b981; color: #10b981; }
+    </style>
+</head><body>
+    <header>
+        <div class="logo"><div class="logo-box"></div><span>Cape Designer</span></div>
+        <div class="actions-header">
+            <button class="btn" onclick="loadCape()"><i class="fas fa-download" style="font-size:0.75rem"></i> Load Cape</button>
+            <button class="btn btn-primary" onclick="saveCape()"><i class="fas fa-upload" style="font-size:0.75rem"></i> Save &amp; Upload</button>
+        </div>
+    </header>
+
+    <div class="main-container">
+        <div class="sidebar">
+            <div>
+                <div class="section-title"><i class="fas fa-paint-brush" style="margin-right:4px;font-size:0.65rem"></i> Tools</div>
+                <div class="tool-grid">
+                    <button class="tool-btn active" id="tool-pencil" onclick="setTool('pencil')"><i class="fas fa-pencil-alt"></i> Pencil</button>
+                    <button class="tool-btn" id="tool-eraser" onclick="setTool('eraser')"><i class="fas fa-eraser"></i> Eraser</button>
+                    <button class="tool-btn" id="tool-fill" onclick="setTool('fill')"><i class="fas fa-fill-drip"></i> Fill</button>
+                    <button class="tool-btn" id="tool-eyedropper" onclick="setTool('eyedropper')"><i class="fas fa-eye-dropper"></i> Dropper</button>
+                </div>
+            </div>
+            <div>
+                <div class="section-title"><i class="fas fa-palette" style="margin-right:4px;font-size:0.65rem"></i> Colors</div>
+                <div class="swatch-grid" id="swatch-grid"></div>
+                <div class="separator"></div>
+                <div class="color-row">
+                    <div class="color-preview" id="color-preview"><input type="color" id="native-color-picker" oninput="onColorInput(this.value)"></div>
+                    <span class="hex-display" id="hex-display">#FFFFFF</span>
+                </div>
+            </div>
+            <div>
+                <div class="section-title"><i class="fas fa-edit" style="margin-right:4px;font-size:0.65rem"></i> Options</div>
+                <div style="display:flex;flex-direction:column;gap:6px">
+                    <button class="btn btn-sm" onclick="toggleMirror()" id="btn-mirror"><i class="fas fa-arrows-alt-h"></i> Mirror</button>
+                    <button class="btn btn-sm" onclick="toggleGrid()" id="btn-grid"><i class="fas fa-th"></i> Grid</button>
+                    <button class="btn btn-sm" onclick="loadTemplate()"><i class="fas fa-cube"></i> Template</button>
+                    <button class="btn btn-sm" style="color:#ef4444" onclick="clearCanvas()"><i class="fas fa-trash-alt"></i> Clear</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="editor-area" id="editor-area">
+            <div class="canvas-wrap" id="canvas-wrap">
+                <canvas id="editor-canvas"></canvas>
+            </div>
+            <div class="canvas-controls">
+                <button class="ctrl-btn" onclick="undo()" title="Undo"><i class="fas fa-undo"></i></button>
+                <button class="ctrl-btn" onclick="redo()" title="Redo"><i class="fas fa-redo"></i></button>
+                <div style="width:1px;height:20px;background:var(--border);margin:0 4px"></div>
+                <button class="ctrl-btn" onclick="zoomOut()" title="Zoom Out"><i class="fas fa-search-minus"></i></button>
+                <span class="zoom-display" id="zoom-display">100%</span>
+                <button class="ctrl-btn" onclick="zoomIn()" title="Zoom In"><i class="fas fa-search-plus"></i></button>
+                <div style="width:1px;height:20px;background:var(--border);margin:0 4px"></div>
+                <button class="ctrl-btn" onclick="toggleGuides()" id="btn-guides" title="Cape Guides"><i class="fas fa-layer-group"></i></button>
+            </div>
+        </div>
+
+        <div class="sidebar sidebar-right">
+            <div>
+                <div class="section-title"><i class="fas fa-cube" style="margin-right:4px;font-size:0.65rem"></i> 3D Preview</div>
+                <div class="preview-box" id="three-container">
+                    <div class="loading-overlay" id="loading-overlay"><div class="spinner"></div><span>Loading...</span></div>
+                </div>
+                <div class="preview-hint">Drag to rotate &middot; Scroll to zoom</div>
+            </div>
+            <div>
+                <div class="section-title"><i class="fas fa-user" style="margin-right:4px;font-size:0.65rem"></i> Player Skin</div>
+                <div class="skin-row">
+                    <input type="text" id="skin-input" placeholder="Username" maxlength="16">
+                    <button class="btn btn-sm" onclick="loadSkin()"><i class="fas fa-check"></i> Load</button>
+                    <button class="btn btn-sm" onclick="clearSkin()" id="btn-clear-skin" style="display:none"><i class="fas fa-times"></i></button>
+                </div>
+            </div>
+            <div>
+                <div class="section-title"><i class="fas fa-exchange-alt" style="margin-right:4px;font-size:0.65rem"></i> Mode</div>
+                <div class="mode-toggle">
+                    <button class="mode-btn active" onclick="setMode('cape')" id="mode-cape">Cape</button>
+                    <button class="mode-btn" onclick="setMode('elytra')" id="mode-elytra">Elytra</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast" id="toast-bar">
+        <div class="toast-dot" id="toast-dot"></div>
+        <span id="toast-text">Ready</span>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+    <script>
+        const CAPE_TEX_W = 64, CAPE_TEX_H = 32;
+        const CAPE_FACES = {
+            front:  { x: 1, y: 1, w: 10, h: 16 },
+            back:   { x: 12, y: 1, w: 10, h: 16 },
+            left:   { x: 0, y: 1, w: 1, h: 16 },
+            right:  { x: 11, y: 1, w: 1, h: 16 },
+            top:    { x: 1, y: 0, w: 10, h: 1 },
+            bottom: { x: 11, y: 0, w: 10, h: 1 },
+        };
+        const ELYTRA_FACES = {
+            front:  { x: 24, y: 2, w: 10, h: 20 },
+            back:   { x: 36, y: 2, w: 10, h: 20 },
+            left:   { x: 22, y: 2, w: 2, h: 20 },
+            right:  { x: 34, y: 2, w: 2, h: 20 },
+            top:    { x: 24, y: 0, w: 10, h: 2 },
+            bottom: { x: 34, y: 0, w: 10, h: 2 },
+        };
+        const SCALE = 20;
+        const COLS = CAPE_TEX_W, ROWS = CAPE_TEX_H;
+        const canvas = document.getElementById('editor-canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = COLS * SCALE; canvas.height = ROWS * SCALE;
+
+        let pixelGrid = Array(ROWS).fill(null).map(() => Array(COLS).fill(null));
+        let undoStack = [], redoStack = [];
+        let activeTool = 'pencil', activeColor = '#FFFFFF';
+        let mirrorMode = false, showGrid = true, showGuides = false, isDrawing = false;
+        let zoom = 1, mode = 'cape';
+
+        // Three.js
+        let scene, camera, renderer, controls, playerGroup, capeMeshes = {}, animId;
+        let skinTex = null, skinCanvas = null;
+
+        // Colors
+        const MC_COLORS = [
+            '#000000','#1D1D1D','#4E4E4E','#6D6D6D','#939393','#BEBEBE','#E0E0E0','#FFFFFF',
+            '#8B4513','#A0522D','#CD853F','#DEB887','#D2691E','#F4A460','#FAEBD7','#FFE4C4',
+            '#FF0000','#B22222','#DC143C','#FF4500','#FF6347','#FF7F50','#FFA07A','#FA8072',
+            '#FFD700','#FFA500','#FF8C00','#DAA520','#B8860B','#D2B48C','#F0E68C','#FAFAD2',
+            '#00FF00','#32CD32','#228B22','#006400','#2E8B57','#3CB371','#66CDAA','#8FBC8F',
+            '#0000FF','#0000CD','#191970','#000080','#4169E1','#6495ED','#87CEEB','#ADD8E6',
+            '#4B0082','#800080','#9400D3','#9932CC','#BA55D3','#DA70D6','#EE82EE','#FF00FF',
+            '#FF1493','#C71585','#DB7093','#FFB6C1','#FF69B4','#FFC0CB','#F08080','#E9967A',
+        ];
+
+        function draw() {
+            const ps = SCALE * zoom;
+            const w = COLS * ps, h = ROWS * ps;
+            canvas.style.width = w + 'px'; canvas.style.height = h + 'px';
+            canvas.width = w; canvas.height = h;
+            ctx.clearRect(0, 0, w, h);
+
+            for (let y = 0; y < ROWS; y++)
+                for (let x = 0; x < COLS; x++) {
+                    ctx.fillStyle = (x + y) % 2 === 0 ? '#c8c8c8' : '#ffffff';
+                    ctx.fillRect(x * ps, y * ps, ps, ps);
+                }
+
+            for (let y = 0; y < ROWS; y++)
+                for (let x = 0; x < COLS; x++) {
+                    const c = pixelGrid[y][x];
+                    if (c) { ctx.fillStyle = c; ctx.fillRect(x * ps, y * ps, ps, ps); }
+                }
+
+            if (showGrid && ps >= 6) {
+                ctx.strokeStyle = 'rgba(0,0,0,0.12)'; ctx.lineWidth = 0.5;
+                for (let x = 0; x <= COLS; x++) { ctx.beginPath(); ctx.moveTo(x * ps, 0); ctx.lineTo(x * ps, h); ctx.stroke(); }
+                for (let y = 0; y <= ROWS; y++) { ctx.beginPath(); ctx.moveTo(0, y * ps); ctx.lineTo(w, y * ps); ctx.stroke(); }
+            }
+
+            if (showGuides) {
+                ctx.save(); ctx.setLineDash([4, 4]); ctx.strokeStyle = 'rgba(255,200,0,0.4)'; ctx.lineWidth = 1.5;
+                const guides = [
+                    { x: 1, y: 1, w: 10, h: 16 }, { x: 12, y: 1, w: 10, h: 16 },
+                    { x: 0, y: 1, w: 1, h: 16 },  { x: 11, y: 1, w: 1, h: 16 },
+                    { x: 1, y: 0, w: 10, h: 1 },   { x: 11, y: 0, w: 10, h: 1 },
+                ];
+                for (const g of guides) ctx.strokeRect(g.x * ps, g.y * ps, g.w * ps, g.h * ps);
+                ctx.setLineDash([]);
+                ctx.font = 'bold ' + Math.max(9, ps * 0.5) + 'px sans-serif';
+                ctx.textAlign = 'center'; ctx.fillStyle = 'rgba(255,200,0,0.5)';
+                ctx.fillText('Front', 6 * ps, 9 * ps); ctx.fillText('Back', 17 * ps, 9 * ps);
+                ctx.restore();
+            }
+
+            if (mirrorMode) {
+                ctx.strokeStyle = 'rgba(255,68,68,0.4)'; ctx.lineWidth = 1; ctx.setLineDash([4, 2]);
+                ctx.beginPath(); ctx.moveTo(6 * ps, 0); ctx.lineTo(6 * ps, h); ctx.stroke(); ctx.setLineDash([]);
+            }
+
+            updateCapeTexture();
+        }
+
+        function setPixel(r, c, color) {
+            if (r < 0 || r >= ROWS || c < 0 || c >= COLS) return;
+            pixelGrid[r][c] = color;
+            if (mirrorMode) {
+                if (c >= 1 && c <= 10) { const m = 1 + (10 - (c - 1)); pixelGrid[r][m] = color; }
+                if (c >= 12 && c <= 21) { const m = 12 + (10 - (c - 12)); pixelGrid[r][m] = color; }
+            }
+        }
+
+        function applyTool(r, c) {
+            if (activeTool === 'pencil') setPixel(r, c, activeColor);
+            else if (activeTool === 'eraser') setPixel(r, c, null);
+            else if (activeTool === 'fill') floodFill(r, c, pixelGrid[r][c], activeColor);
+            else if (activeTool === 'eyedropper') { const col = pixelGrid[r][c]; if (col) { updateColor(col); setTool('pencil'); } }
+        }
+
+        function floodFill(r, c, target, fill) {
+            if (target === fill) return;
+            const stack = [[r, c]], visited = new Set();
+            while (stack.length) {
+                const [cr, cc] = stack.pop();
+                const key = cr * COLS + cc;
+                if (cr < 0 || cr >= ROWS || cc < 0 || cc >= COLS || visited.has(key) || pixelGrid[cr][cc] !== target) continue;
+                visited.add(key);
+                pixelGrid[cr][cc] = fill;
+                if (mirrorMode) {
+                    if (cc >= 1 && cc <= 10) { pixelGrid[cr][1 + (10 - (cc - 1))] = fill; }
+                    if (cc >= 12 && cc <= 21) { pixelGrid[cr][12 + (10 - (cc - 12))] = fill; }
+                }
+                stack.push([cr + 1, cc], [cr - 1, cc], [cr, cc + 1], [cr, cc - 1]);
+            }
+        }
+
+        // Input
+        function getPos(e) {
+            const rect = canvas.getBoundingClientRect();
+            const ps = SCALE * zoom;
+            return { r: Math.floor((e.clientY - rect.top) / ps), c: Math.floor((e.clientX - rect.left) / ps) };
+        }
+        function onMouseDown(e) { e.preventDefault(); const p = getPos(e); if (p.r < 0 || p.r >= ROWS || p.c < 0 || p.c >= COLS) return; isDrawing = true; saveUndo(); redoStack = []; applyTool(p.r, p.c); draw(); }
+        function onMouseMove(e) { if (!isDrawing) return; const p = getPos(e); if (p.r < 0 || p.r >= ROWS || p.c < 0 || p.c >= COLS) return; if (activeTool === 'pencil' || activeTool === 'eraser') { applyTool(p.r, p.c); draw(); } }
+        function onMouseUp() { isDrawing = false; }
+
+        function setTool(tool) { activeTool = tool; document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active')); const el = document.getElementById('tool-' + tool); if (el) el.classList.add('active'); }
+        function setMode(m) { mode = m; document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active')); document.getElementById('mode-' + m).classList.add('active'); }
+        function loadPalette() {
+            const grid = document.getElementById('swatch-grid'); grid.innerHTML = '';
+            MC_COLORS.forEach(color => {
+                const swatch = document.createElement('div');
+                swatch.className = 'swatch'; swatch.style.backgroundColor = color;
+                if (color.toLowerCase() === activeColor.toLowerCase()) swatch.classList.add('selected');
+                swatch.onclick = () => { document.querySelectorAll('.swatch').forEach(s => s.classList.remove('selected')); swatch.classList.add('selected'); updateColor(color); };
+                grid.appendChild(swatch);
+            });
+        }
+        function updateColor(color) { activeColor = color; document.getElementById('color-preview').style.backgroundColor = color; document.getElementById('native-color-picker').value = color; document.getElementById('hex-display').textContent = color.toUpperCase(); }
+        function onColorInput(color) { updateColor(color); }
+        function saveUndo() { undoStack.push(pixelGrid.map(r => [...r])); if (undoStack.length > 50) undoStack.shift(); }
+        function undo() { if (!undoStack.length) return; redoStack.push(pixelGrid.map(r => [...r])); pixelGrid = undoStack.pop().map(r => [...r]); draw(); }
+        function redo() { if (!redoStack.length) return; undoStack.push(pixelGrid.map(r => [...r])); pixelGrid = redoStack.pop().map(r => [...r]); draw(); }
+        function zoomIn() { zoom = Math.min(4, zoom + 0.25); updateZoom(); }
+        function zoomOut() { zoom = Math.max(0.25, zoom - 0.25); updateZoom(); }
+        function updateZoom() { document.getElementById('zoom-display').textContent = Math.round(zoom * 100) + '%'; draw(); }
+        function toggleMirror() { mirrorMode = !mirrorMode; document.getElementById('btn-mirror').classList.toggle('active', mirrorMode); draw(); }
+        function toggleGrid() { showGrid = !showGrid; document.getElementById('btn-grid').classList.toggle('active', showGrid); draw(); }
+        function toggleGuides() { showGuides = !showGuides; document.getElementById('btn-guides').classList.toggle('active', showGuides); draw(); }
+        function clearCanvas() { if (!confirm('Clear the entire canvas?')) return; saveUndo(); pixelGrid = Array(ROWS).fill(null).map(() => Array(COLS).fill(null)); draw(); }
+
+        function loadTemplate() {
+            saveUndo(); pixelGrid = Array(ROWS).fill(null).map(() => Array(COLS).fill(null));
+            const faces = [
+                { x: 1, y: 1, w: 10, h: 16, c: '#DC143C', e: '#9B1030' },
+                { x: 12, y: 1, w: 10, h: 16, c: '#1565C0', e: '#0D47A1' },
+                { x: 11, y: 1, w: 1, h: 16, c: '#2E7D32', e: '#1B5E20' },
+                { x: 0, y: 1, w: 1, h: 16, c: '#7B1FA2', e: '#4A148C' },
+                { x: 1, y: 0, w: 10, h: 1, c: '#FF8F00', e: '#E65100' },
+                { x: 11, y: 0, w: 10, h: 1, c: '#00838F', e: '#006064' },
+            ];
+            for (const f of faces) for (let dy = 0; dy < f.h; dy++) for (let dx = 0; dx < f.w; dx++) { const ie = dx === 0 || dy === 0 || dx === f.w - 1 || dy === f.h - 1; pixelGrid[f.y + dy][f.x + dx] = ie ? f.e : f.c; }
+            draw();
+        }
+
+        // Three.js
+        function initThreeJS() {
+            const container = document.getElementById('three-container');
+            scene = new THREE.Scene(); scene.background = new THREE.Color(0x0c0c10);
+            const w = container.clientWidth, h = container.clientHeight;
+            camera = new THREE.PerspectiveCamera(30, w / h, 0.1, 100);
+            camera.position.set(0, 10, 28);
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(w, h); renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            container.appendChild(renderer.domElement);
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.target.set(0, 6, 0); controls.enableDamping = true; controls.dampingFactor = 0.08;
+            controls.minDistance = 10; controls.maxDistance = 50; controls.maxPolarAngle = Math.PI / 2;
+            controls.update();
+            scene.add(new THREE.AmbientLight(0x606080, 0.6));
+            const dl = new THREE.DirectionalLight(0xffffff, 1.2); dl.position.set(10, 20, 15); scene.add(dl);
+            const fl = new THREE.DirectionalLight(0x8888ff, 0.4); fl.position.set(-10, 5, -10); scene.add(fl);
+            const rl = new THREE.DirectionalLight(0xffffff, 0.3); rl.position.set(0, -5, -15); scene.add(rl);
+            const sh = new THREE.Mesh(new THREE.PlaneGeometry(14, 14), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.12, depthWrite: false }));
+            sh.rotation.x = -Math.PI / 2; sh.position.y = -0.5; scene.add(sh);
+            playerGroup = new THREE.Group(); scene.add(playerGroup);
+            createPlayerModel(); createCapeModel(); animate();
+            window.addEventListener('resize', () => { const cw = container.clientWidth, ch = container.clientHeight; camera.aspect = cw / ch; camera.updateProjectionMatrix(); renderer.setSize(cw, ch); });
+        }
+
+        function createPlayerModel() {
+            const mp = (n, w, h, d) => { const g = new THREE.BoxGeometry(w, h, d); const m = new THREE.MeshStandardMaterial({ color: 0xcccccc }); m.magFilter = THREE.NearestFilter; m.minFilter = THREE.NearestFilter; const mesh = new THREE.Mesh(g, m); mesh.name = n; return { g, mesh }; };
+            const uv = (g, f, px, py, pw, ph, tw, th) => { const u = g.attributes.uv; const i = f * 4; const u0 = px / tw, u1 = (px + pw) / tw, v0 = 1 - (py + ph) / th, v1 = 1 - py / th; u.setXY(i, u0, v1); u.setXY(i + 1, u1, v1); u.setXY(i + 2, u1, v0); u.setXY(i + 3, u0, v0); u.needsUpdate = true; };
+
+            const head = mp('head', 8, 8, 8); [[4,8,8,8,8],[5,24,8,8,8],[0,16,8,8,8],[1,0,8,8,8],[2,8,0,8,8],[3,16,0,8,8]].forEach(([f,px,py,pw,ph]) => uv(head.g, f, px, py, pw, ph, 64, 64)); head.mesh.position.set(0, 20, 0); playerGroup.add(head.mesh);
+            const torso = mp('torso', 8, 12, 4); [[4,20,20,8,12],[5,32,20,8,12],[0,28,20,4,12],[1,16,20,4,12],[2,20,16,8,4],[3,28,16,8,4]].forEach(([f,px,py,pw,ph]) => uv(torso.g, f, px, py, pw, ph, 64, 64)); torso.mesh.position.set(0, 10, 0); playerGroup.add(torso.mesh);
+            const ra = mp('rightArm', 4, 12, 4); [[4,44,20,4,12],[5,52,20,4,12],[0,48,20,4,12],[1,40,20,4,12],[2,44,16,4,4],[3,48,16,4,4]].forEach(([f,px,py,pw,ph]) => uv(ra.g, f, px, py, pw, ph, 64, 64)); ra.mesh.position.set(6, 10, 0); playerGroup.add(ra.mesh);
+            const la = mp('leftArm', 4, 12, 4); [[4,36,48,4,12],[5,44,48,4,12],[0,40,48,4,12],[1,32,48,4,12],[2,36,44,4,4],[3,40,44,4,4]].forEach(([f,px,py,pw,ph]) => uv(la.g, f, px, py, pw, ph, 64, 64)); la.mesh.position.set(-6, 10, 0); playerGroup.add(la.mesh);
+            const rl = mp('rightLeg', 4, 12, 4); [[4,4,20,4,12],[5,12,20,4,12],[0,8,20,4,12],[1,0,20,4,12],[2,4,16,4,4],[3,8,16,4,4]].forEach(([f,px,py,pw,ph]) => uv(rl.g, f, px, py, pw, ph, 64, 64)); rl.mesh.position.set(2.2, 2, 0); playerGroup.add(rl.mesh);
+            const ll = mp('leftLeg', 4, 12, 4); [[4,20,48,4,12],[5,28,48,4,12],[0,24,48,4,12],[1,16,48,4,12],[2,20,44,4,4],[3,24,44,4,4]].forEach(([f,px,py,pw,ph]) => uv(ll.g, f, px, py, pw, ph, 64, 64)); ll.mesh.position.set(-2.2, 2, 0); playerGroup.add(ll.mesh);
+        }
+
+        function createCapeModel() {
+            const cg = new THREE.Group(); cg.name = 'capeGroup'; cg.position.set(0, 8, -2.5);
+            const defs = [
+                { n: 'front', gw: 10, gh: 16, gx: 0, gy: 0, gz: 0.5, ry: 0, sx: 1, sy: 1, sw: 10, sh: 16 },
+                { n: 'back',  gw: 10, gh: 16, gx: 0, gy: 0, gz: -0.5, ry: Math.PI, sx: 12, sy: 1, sw: 10, sh: 16 },
+                { n: 'left',  gw: 1,  gh: 16, gx: -5, gy: 0, gz: 0, ry: -Math.PI / 2, sx: 0, sy: 1, sw: 1, sh: 16 },
+                { n: 'right', gw: 1,  gh: 16, gx: 5,  gy: 0, gz: 0, ry: Math.PI / 2, sx: 11, sy: 1, sw: 1, sh: 16 },
+                { n: 'top',   gw: 10, gh: 1,  gx: 0, gy: 8, gz: 0, rx: -Math.PI / 2, sx: 1, sy: 0, sw: 10, sh: 1 },
+                { n: 'bottom',gw: 10, gh: 1,  gx: 0, gy: -8, gz: 0, rx: Math.PI / 2, sx: 11, sy: 0, sw: 10, sh: 1 },
+            ];
+            defs.forEach(d => {
+                const tex = new THREE.CanvasTexture(document.createElement('canvas'));
+                tex.magFilter = THREE.NearestFilter; tex.minFilter = THREE.NearestFilter;
+                tex.image.width = d.sw; tex.image.height = d.sh;
+                const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: true });
+                const mesh = new THREE.Mesh(new THREE.PlaneGeometry(d.gw, d.gh), mat);
+                mesh.name = 'capeFace_' + d.n; mesh.position.set(d.gx, d.gy, d.gz);
+                if (d.rx) mesh.rotation.x = d.rx; if (d.ry) mesh.rotation.y = d.ry;
+                cg.add(mesh); capeMeshes[d.n] = mesh;
+            });
+            playerGroup.add(cg);
+        }
+
+        function updateCapeTexture() {
+            const faces = ['front', 'back', 'left', 'right', 'top', 'bottom'];
+            faces.forEach(name => {
+                const mesh = capeMeshes[name]; if (!mesh) return;
+                const def = CAPE_FACES[name]; const c = mesh.material.map.image; const cx = c.getContext('2d');
+                cx.clearRect(0, 0, c.width, c.height);
+                for (let r = 0; r < def.h; r++) for (let col = 0; col < def.w; col++) {
+                    const color = pixelGrid[def.y + r]?.[def.x + col];
+                    if (color) { cx.fillStyle = color; cx.fillRect(col, r, 1, 1); }
+                }
+                mesh.material.map.needsUpdate = true;
+            });
+        }
+
+        function animate() {
+            animId = requestAnimationFrame(animate); controls.update();
+            const cg = playerGroup.getObjectByName('capeGroup');
+            if (cg) { const t = Date.now() * 0.001; cg.rotation.x = Math.sin(t * 1.8) * 0.03; cg.position.z = -2.5 + Math.sin(t * 2.2) * 0.15; cg.position.y = 8 + Math.sin(t * 1.5) * 0.05; }
+            renderer.render(scene, camera);
+        }
+
+        // Skin loading
+        function loadSkin() {
+            const name = document.getElementById('skin-input').value.trim();
+            if (!name) return;
+            const overlay = document.getElementById('loading-overlay'); overlay.classList.remove('hidden');
+            overlay.querySelector('span').textContent = 'Loading ' + name + '...';
+            const url = '/api/crafatar?username=' + encodeURIComponent(name) + '&type=skin';
+            const img = new window.Image(); img.crossOrigin = 'anonymous';
+            img.onload = () => {
+                const c = document.createElement('canvas'); c.width = 64; c.height = 64;
+                const cx = c.getContext('2d'); cx.drawImage(img, 0, 0);
+                if (skinTex) { skinTex.image = c; skinTex.needsUpdate = true; }
+                else {
+                    skinTex = new THREE.CanvasTexture(c);
+                    skinTex.magFilter = THREE.NearestFilter; skinTex.minFilter = THREE.NearestFilter;
+                }
+                ['head','torso','rightArm','leftArm','rightLeg','leftLeg'].forEach(p => { const m = playerGroup.getObjectByName(p); if (m) { m.material.map = skinTex; m.material.needsUpdate = true; } });
+                overlay.classList.add('hidden');
+                document.getElementById('btn-clear-skin').style.display = '';
+            };
+            img.onerror = () => { overlay.querySelector('span').textContent = 'Using fallback skin'; setTimeout(() => overlay.classList.add('hidden'), 1500); };
+            img.src = url;
+        }
+
+        function clearSkin() {
+            ['head','torso','rightArm','leftArm','rightLeg','leftLeg'].forEach(p => { const m = playerGroup.getObjectByName(p); if (m) { m.material.map = null; m.material.needsUpdate = true; } });
+            document.getElementById('btn-clear-skin').style.display = 'none';
+            document.getElementById('skin-input').value = '';
+        }
+
+        // Toast
+        function showToast(msg, type) {
+            const bar = document.getElementById('toast-bar'), text = document.getElementById('toast-text'), dot = document.getElementById('toast-dot');
+            text.textContent = msg;
+            dot.style.backgroundColor = type === 'success' ? '#10b981' : type === 'error' ? '#ef4444' : '#3b82f6';
+            bar.classList.add('show');
+            setTimeout(() => bar.classList.remove('show'), 3000);
+        }
+
+        // API
+        function loadCape() {
+            showToast('Loading cape...');
+            fetch('/api/load').then(r => r.json()).then(d => {
+                if (d.status === 'success') {
+                    if (d.image) {
+                        const img = new Image();
+                        img.onload = () => {
+                            const tc = document.createElement('canvas'); tc.width = 64; tc.height = 32;
+                            const tx = tc.getContext('2d'); tx.drawImage(img, 0, 0);
+                            const id = tx.getImageData(0, 0, 64, 32).data;
+                            for (let r = 0; r < 32; r++) for (let c = 0; c < 64; c++) {
+                                const i = (r * 64 + c) * 4;
+                                pixelGrid[r][c] = id[i + 3] > 0 ? '#' + [id[i], id[i+1], id[i+2]].map(v => v.toString(16).padStart(2, '0')).join('') : null;
+                            }
+                            undoStack = []; saveUndo(); draw(); showToast('Cape loaded!', 'success');
+                        };
+                        img.src = 'data:image/png;base64,' + d.image;
+                    } else showToast('No cape loaded. Start designing!', 'success');
+                } else showToast('Failed: ' + d.message, 'error');
+            }).catch(() => showToast('Failed to load cape', 'error'));
+        }
+
+        function saveCape() {
+            showToast('Uploading cape...');
+            const tc = document.createElement('canvas'); tc.width = CAPE_TEX_W; tc.height = CAPE_TEX_H;
+            const tx = tc.getContext('2d');
+            for (let r = 0; r < CAPE_TEX_H; r++) for (let c = 0; c < CAPE_TEX_W; c++) {
+                const color = pixelGrid[r][c]; if (color) { tx.fillStyle = color; tx.fillRect(c, r, 1, 1); }
+            }
+            const b64 = tc.toDataURL('image/png').split(',')[1];
+            fetch('/api/save', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image: b64 }) })
+                .then(r => r.json()).then(d => {
+                    if (d.status === 'success') showToast('Cape uploaded!', 'success');
+                    else showToast('Failed: ' + d.message, 'error');
+                }).catch(() => showToast('Failed to save cape', 'error'));
+        }
+
+        // Init
+        function init() {
+            loadPalette(); updateColor(activeColor); saveUndo(); draw(); initThreeJS(); loadCape();
+            fetch('/api/player').then(r => r.json()).then(d => {
+                if (d.status === 'success' && d.uuid) loadSkin();
+                else document.getElementById('loading-overlay').classList.add('hidden');
+            }).catch(() => document.getElementById('loading-overlay').classList.add('hidden'));
+            canvas.addEventListener('mousedown', onMouseDown); canvas.addEventListener('mousemove', onMouseMove); window.addEventListener('mouseup', onMouseUp);
+        }
+        window.onload = init;
+    </script>
+</body>
+</html>

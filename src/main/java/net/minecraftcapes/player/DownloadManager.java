@@ -7,11 +7,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.io.InputStream;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
@@ -22,28 +17,41 @@ import net.minecraftcapes.MinecraftCapes;
 
 public class DownloadManager {
     private static final Logger LOGGER = LoggerFactory.getLogger("minecraftcapes");
-    private static final HttpClient CLIENT = HttpClient.newHttpClient();
-    private static final String CAPE_BASE_URL = "https://raw.githubusercontent.com/Uk-Cat/Minecraft-Cape/main/Capes/";
 
     public static void prepareDownload(PlayerHandler playerHandler) {
+        if (playerHandler.hasInfo()) {
+            LOGGER.debug("Already loaded cape for {}, skipping", playerHandler.getUuidString());
+            return;
+        }
+
         Util.backgroundExecutor().execute(() -> {
             try {
                 String uuidStr = playerHandler.getUuidString();
-                String url = CAPE_BASE_URL + uuidStr + ".png";
-                NativeImage capeImage = downloadOrLoad(url, "capes", uuidStr);
+                NativeImage capeImage = tryLoadFromCache(uuidStr);
                 if (capeImage != null) {
                     Minecraft.getInstance().execute(() -> playerHandler.applyCape(capeImage));
                     playerHandler.setInfo(true);
-                    LOGGER.info("Loaded cape for {}", uuidStr);
+                    LOGGER.info("Loaded cape for {} from cache", uuidStr);
+                    return;
                 }
+
+                CloudflareManager.pullCape(uuidStr,
+                        image -> {
+                            saveToCache(uuidStr, image);
+                            playerHandler.applyCape(image);
+                            playerHandler.setInfo(true);
+                            LOGGER.info("Loaded cape for {} from worker", uuidStr);
+                        },
+                        error -> LOGGER.error("Failed to load cape for {}: {}", uuidStr, error)
+                );
             } catch (Exception e) {
                 LOGGER.error("Failed to load cape for {}", playerHandler.getUuidString(), e);
             }
         });
     }
 
-    private static NativeImage downloadOrLoad(String url, String type, String uuidStr) throws IOException {
-        Path cacheDir = MinecraftCapes.configDir.resolve(type);
+    private static NativeImage tryLoadFromCache(String uuidStr) throws IOException {
+        Path cacheDir = MinecraftCapes.configDir.resolve("capes");
         Files.createDirectories(cacheDir);
 
         String hash = hashString(uuidStr);
@@ -57,24 +65,23 @@ public class DownloadManager {
                 Files.deleteIfExists(cacheFile);
             }
         }
-
-        try {
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(url))
-                    .GET()
-                    .build();
-            HttpResponse<InputStream> response = CLIENT.send(request, HttpResponse.BodyHandlers.ofInputStream());
-            if (response.statusCode() == 200) {
-                Files.createDirectories(cacheFile.getParent());
-                try (InputStream in = response.body()) {
-                    Files.copy(in, cacheFile);
-                }
-                return NativeImage.read(Files.newInputStream(cacheFile));
-            }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
         return null;
+    }
+
+    public static void saveToCache(String uuidStr, NativeImage image) {
+        try {
+            Path cacheDir = MinecraftCapes.configDir.resolve("capes");
+            Files.createDirectories(cacheDir);
+
+            String hash = hashString(uuidStr);
+            String prefix = hash.substring(0, 2);
+            Path cacheFile = cacheDir.resolve(prefix).resolve(uuidStr + ".png");
+
+            Files.createDirectories(cacheFile.getParent());
+            image.writeToFile(cacheFile);
+        } catch (IOException e) {
+            LOGGER.error("Failed to cache cape for {}", uuidStr, e);
+        }
     }
 
     private static String hashString(String input) {

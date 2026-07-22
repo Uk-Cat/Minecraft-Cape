@@ -15,6 +15,7 @@ public class MinecraftCapesConfig {
     private static class ConfigData {
         boolean capeVisible = true;
         boolean earsVisible = true;
+        int requestCooldownSeconds = 60;
     }
 
     public static void loadConfig(Path configDir) {
@@ -42,12 +43,18 @@ public class MinecraftCapesConfig {
 
     public static boolean isCapeVisible() { return data.capeVisible; }
     public static boolean isEarsVisible() { return data.earsVisible; }
+    public static int getRequestCooldownSeconds() { return data.requestCooldownSeconds; }
+
     public static void setCapeVisible(boolean visible) {
         data.capeVisible = visible;
         saveConfig();
     }
     public static void setEarsVisible(boolean visible) {
         data.earsVisible = visible;
+        saveConfig();
+    }
+    public static void setRequestCooldownSeconds(int seconds) {
+        data.requestCooldownSeconds = seconds;
         saveConfig();
     }
 }

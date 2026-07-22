@@ -37,6 +37,11 @@ public class MenuScreen extends Screen {
         ).width(BUTTON_WIDTH).build());
 
         layout.addChild(Button.builder(
+                Component.translatable("button.minecraftcapes.designer"),
+                btn -> Minecraft.getInstance().setScreen(new CapeDesignerScreen(this))
+        ).width(BUTTON_WIDTH).build());
+
+        layout.addChild(Button.builder(
                 Component.translatable("button.minecraftcapes.reload_profile"),
                 btn -> {
                     PlayerHandler handler = PlayerHandler.getOrCreate(Minecraft.getInstance().getUser().getProfileId());
@@ -73,6 +78,11 @@ public class MenuScreen extends Screen {
         layout.addChild(Button.builder(
                 Component.translatable("button.minecraftcapes.website"),
                 btn -> Util.getPlatform().openUri("https://minecraftcapes.net")
+        ).width(BUTTON_WIDTH).build());
+
+        layout.addChild(Button.builder(
+                Component.translatable("button.minecraftcapes.designer.save"),
+                btn -> Util.getPlatform().openUri("https://minecraftcapes.net/upload")
         ).width(BUTTON_WIDTH).build());
 
         layout.arrangeElements();

@@ -1,0 +1,801 @@
+     1→     1→'use client';
+     2→     2→
+     3→     3→import {
+     4→     4→  useRef,
+     5→     5→  useMemo,
+     6→     6→  useEffect,
+     7→     7→  useState,
+     8→     8→  useCallback,
+     9→     9→} from 'react';
+    10→    10→import { Canvas } from '@react-three/fiber';
+    11→    11→import { OrbitControls, Grid } from '@react-three/drei';
+    12→    12→import * as THREE from 'three';
+    13→    13→import { useCapeEditorStore } from './cape-editor-store';
+    14→    14→import { Input } from '@/components/ui/input';
+    15→    15→import { Button } from '@/components/ui/button';
+    16→    16→import { Loader2, X } from 'lucide-react';
+    17→    17→
+    18→    18→// ═══════════════════════════════════════════════════════════════
+    19→    19→// Types & Constants
+    20→    20→// ═══════════════════════════════════════════════════════════════
+    21→    21→
+    22→    22→/** UV region in pixel coordinates: [startX, startY, width, height] */
+    23→    23→type UVRegion = [number, number, number, number];
+    24→    24→
+    25→    25→/** Six-face UV map ordered: [+x right, -x left, +y top, -y bottom, +z front, -z back] */
+    26→    26→type FaceUVMap = UVRegion[];
+    27→    27→
+    28→    28→const MODEL_SCALE = 0.14;
+    29→    29→const SKIN_SIZE = 64;
+    30→    30→const CAPE_TEX_W = 64;
+    31→    31→const CAPE_TEX_H = 32;
+    32→    32→
+    33→    33→// ═══════════════════════════════════════════════════════════════
+    34→    34→// Minecraft Skin UV Layouts (64×64 texture)
+    35→    35→// Positions match MinecraftCapes/minecraft-skin-viewer
+    36→    36→// Body center at (0,0,0), head at (0,10,0), legs at (y=-12)
+    37→    37→// ═══════════════════════════════════════════════════════════════
+    38→    38→
+    39→    39→const UV_HEAD: FaceUVMap = [
+    40→    40→  [0, 8, 8, 8],    // +X right side
+    41→    41→  [16, 8, 8, 8],   // -X left side
+    42→    42→  [8, 0, 8, 8],    // +Y top
+    43→    43→  [16, 0, 8, 8],   // -Y bottom
+    44→    44→  [8, 8, 8, 8],    // +Z front
+    45→    45→  [24, 8, 8, 8],   // -Z back
+    46→    46→];
+    47→    47→
+    48→    48→const UV_BODY: FaceUVMap = [
+    49→    49→  [16, 20, 4, 12],
+    50→    50→  [28, 20, 4, 12],
+    51→    51→  [20, 16, 8, 4],
+    52→    52→  [28, 16, 8, 4],
+    53→    53→  [20, 20, 8, 12],
+    54→    54→  [32, 20, 8, 12],
+    55→    55→];
+    56→    56→
+    57→    57→const UV_RIGHT_ARM: FaceUVMap = [
+    58→    58→  [40, 20, 4, 12],
+    59→    59→  [48, 20, 4, 12],
+    60→    60→  [44, 16, 4, 4],
+    61→    61→  [48, 16, 4, 4],
+    62→    62→  [44, 20, 4, 12],
+    63→    63→  [52, 20, 4, 12],
+    64→    64→];
+    65→    65→
+    66→    66→const UV_LEFT_ARM: FaceUVMap = [
+    67→    67→  [32, 52, 4, 12],
+    68→    68→  [40, 52, 4, 12],
+    69→    69→  [36, 48, 4, 4],
+    70→    70→  [40, 48, 4, 4],
+    71→    71→  [36, 52, 4, 12],
+    72→    72→  [44, 52, 4, 12],
+    73→    73→];
+    74→    74→
+    75→    75→const UV_RIGHT_LEG: FaceUVMap = [
+    76→    76→  [0, 20, 4, 12],
+    77→    77→  [8, 20, 4, 12],
+    78→    78→  [4, 16, 4, 4],
+    79→    79→  [8, 16, 4, 4],
+    80→    80→  [4, 20, 4, 12],
+    81→    81→  [12, 20, 4, 12],
+    82→    82→];
+    83→    83→
+    84→    84→const UV_LEFT_LEG: FaceUVMap = [
+    85→    85→  [16, 52, 4, 12],
+    86→    86→  [24, 52, 4, 12],
+    87→    87→  [20, 48, 4, 4],
+    88→    88→  [24, 48, 4, 4],
+    89→    89→  [20, 52, 4, 12],
+    90→    90→  [28, 52, 4, 12],
+    91→    91→];
+    92→    92→
+    93→    93→// Overlay (outer skin layer) UV regions — same dimensions, different texture regions
+    94→    94→const UV_HEAD_OVERLAY: FaceUVMap = [
+    95→    95→  [32, 8, 8, 8],
+    96→    96→  [48, 8, 8, 8],
+    97→    97→  [40, 0, 8, 8],
+    98→    98→  [48, 0, 8, 8],
+    99→    99→  [40, 8, 8, 8],
+   100→   100→  [56, 8, 8, 8],
+   101→   101→];
+   102→   102→
+   103→   103→const UV_BODY_OVERLAY: FaceUVMap = [
+   104→   104→  [16, 36, 4, 12],
+   105→   105→  [28, 36, 4, 12],
+   106→   106→  [20, 32, 8, 4],
+   107→   107→  [28, 32, 8, 4],
+   108→   108→  [20, 36, 8, 12],
+   109→   109→  [32, 36, 8, 12],
+   110→   110→];
+   111→   111→
+   112→   112→const UV_RIGHT_ARM_OVERLAY: FaceUVMap = [
+   113→   113→  [40, 36, 4, 12],
+   114→   114→  [48, 36, 4, 12],
+   115→   115→  [44, 32, 4, 4],
+   116→   116→  [48, 32, 4, 4],
+   117→   117→  [44, 36, 4, 12],
+   118→   118→  [52, 36, 4, 12],
+   119→   119→];
+   120→   120→
+   121→   121→const UV_LEFT_ARM_OVERLAY: FaceUVMap = [
+   122→   122→  [48, 52, 4, 12],
+   123→   123→  [56, 52, 4, 12],
+   124→   124→  [52, 48, 4, 4],
+   125→   125→  [56, 48, 4, 4],
+   126→   126→  [52, 52, 4, 12],
+   127→   127→  [60, 52, 4, 12],
+   128→   128→];
+   129→   129→
+   130→   130→const UV_RIGHT_LEG_OVERLAY: FaceUVMap = [
+   131→   131→  [0, 36, 4, 12],
+   132→   132→  [8, 36, 4, 12],
+   133→   133→  [4, 32, 4, 4],
+   134→   134→  [8, 32, 4, 4],
+   135→   135→  [4, 36, 4, 12],
+   136→   136→  [12, 36, 4, 12],
+   137→   137→];
+   138→   138→
+   139→   139→const UV_LEFT_LEG_OVERLAY: FaceUVMap = [
+   140→   140→  [0, 52, 4, 12],
+   141→   141→  [8, 52, 4, 12],
+   142→   142→  [4, 48, 4, 4],
+   143→   143→  [8, 48, 4, 4],
+   144→   144→  [4, 52, 4, 12],
+   145→   145→  [12, 52, 4, 12],
+   146→   146→];
+   147→   147→
+   148→   148→// ═══════════════════════════════════════════════════════════════
+   149→   149→// Cape UV layout (64×32 texture)
+   150→   150→// ═══════════════════════════════════════════════════════════════
+   151→   151→
+   152→   152→const UV_CAPE: FaceUVMap = [
+   153→   153→  [11, 1, 1, 16],   // +X right edge
+   154→   154→  [0, 1, 1, 16],    // -X left edge
+   155→   155→  [1, 0, 10, 1],    // +Y top edge
+   156→   156→  [11, 0, 10, 1],   // -Y bottom edge
+   157→   157→  [1, 1, 10, 16],   // +Z front
+   158→   158→  [12, 1, 10, 16],  // -Z back
+   159→   159→];
+   160→   160→
+   161→   161→// ═══════════════════════════════════════════════════════════════
+   162→   162→// Elytra UV layout (64×32 texture)
+   163→   163→// ═══════════════════════════════════════════════════════════════
+   164→   164→
+   165→   165→const UV_ELYTRA: FaceUVMap = [
+   166→   166→  [34, 2, 2, 20],   // +X right edge
+   167→   167→  [22, 2, 2, 20],   // -X left edge
+   168→   168→  [24, 0, 10, 2],   // +Y top edge
+   169→   169→  [34, 0, 10, 2],   // -Y bottom edge
+   170→   170→  [24, 2, 10, 20],  // +Z front (inner wing face)
+   171→   171→  [36, 2, 10, 20],  // -Z back (outer wing face)
+   172→   172→];
+   173→   173→
+   174→   174→// ═══════════════════════════════════════════════════════════════
+   175→   175→// Default Steve Colors (always-visible player body)
+   176→   176→// ═══════════════════════════════════════════════════════════════
+   177→   177→
+   178→   178→const STEVE_COLORS = {
+   179→   179→  head: '#b58d6e',
+   180→   180→  body: '#3ca4c4',
+   181→   181→  rightArm: '#b58d6e',
+   182→   182→  leftArm: '#b58d6e',
+   183→   183→  rightLeg: '#3b3b8e',
+   184→   184→  leftLeg: '#3b3b8e',
+   185→   185→} as const;
+   186→   186→
+   187→   187→// ═══════════════════════════════════════════════════════════════
+   188→   188→// Body part positions — matching MinecraftCapes/minecraft-skin-viewer
+   189→   189→// Body center at (0,0,0), head above, legs below
+   190→   190→// ═══════════════════════════════════════════════════════════════
+   191→   191→
+   192→   192→const POS_HEAD: [number, number, number] = [0, 10, 0];
+   193→   193→const POS_BODY: [number, number, number] = [0, 0, 0];
+   194→   194→const POS_RIGHT_ARM: [number, number, number] = [-6, 0, 0];
+   195→   195→const POS_LEFT_ARM: [number, number, number] = [6, 0, 0];
+   196→   196→const POS_RIGHT_LEG: [number, number, number] = [-2, -12, 0];
+   197→   197→const POS_LEFT_LEG: [number, number, number] = [2, -12, 0];
+   198→   198→
+   199→   199→// ═══════════════════════════════════════════════════════════════
+   200→   200→// Utility: Create a BoxGeometry with per-face UV mapping
+   201→   201→// ═══════════════════════════════════════════════════════════════
+   202→   202→
+   203→   203→function createUVBox(
+   204→   204→  width: number,
+   205→   205→  height: number,
+   206→   206→  depth: number,
+   207→   207→  uvMap: FaceUVMap,
+   208→   208→  texW: number = SKIN_SIZE,
+   209→   209→  texH: number = SKIN_SIZE,
+   210→   210→): THREE.BoxGeometry {
+   211→   211→  const geo = new THREE.BoxGeometry(width, height, depth);
+   212→   212→  const uvAttr = geo.getAttribute('uv') as THREE.BufferAttribute;
+   213→   213→
+   214→   214→  for (let face = 0; face < 6; face++) {
+   215→   215→    const [px, py, pw, ph] = uvMap[face];
+   216→   216→
+   217→   217→    const u0 = px / texW;
+   218→   218→    const u1 = (px + pw) / texW;
+   219→   219→    const vBottom = 1 - (py + ph) / texH;
+   220→   220→    const vTop = 1 - py / texH;
+   221→   221→
+   222→   222→    const base = face * 4;
+   223→   223→
+   224→   224→    if (face === 3) {
+   225→   225→      // -Y (bottom) face uses [BL, BR, TL, TR] ordering
+   226→   226→      uvAttr.setXY(base,     u0, vBottom);
+   227→   227→      uvAttr.setXY(base + 1, u1, vBottom);
+   228→   228→      uvAttr.setXY(base + 2, u0, vTop);
+   229→   229→      uvAttr.setXY(base + 3, u1, vTop);
+   230→   230→    } else {
+   231→   231→      // All other faces use [TL, TR, BL, BR] ordering
+   232→   232→      uvAttr.setXY(base,     u0, vTop);
+   233→   233→      uvAttr.setXY(base + 1, u1, vTop);
+   234→   234→      uvAttr.setXY(base + 2, u0, vBottom);
+   235→   235→      uvAttr.setXY(base + 3, u1, vBottom);
+   236→   236→    }
+   237→   237→  }
+   238→   238→
+   239→   239→  uvAttr.needsUpdate = true;
+   240→   240→  return geo;
+   241→   241→}
+   242→   242→
+   243→   243→// ═══════════════════════════════════════════════════════════════
+   244→   244→// Sub-Component: SkinPart
+   245→   245→// Renders the inner skin layer (solid color fallback + texture)
+   246→   246→// ═══════════════════════════════════════════════════════════════
+   247→   247→
+   248→   248→function SkinPart({
+   249→   249→  geometry,
+   250→   250→  skinMaterial,
+   251→   251→  fallbackColor,
+   252→   252→  position,
+   253→   253→}: {
+   254→   254→  geometry: THREE.BoxGeometry;
+   255→   255→  skinMaterial: THREE.Material | null;
+   256→   256→  fallbackColor: string;
+   257→   257→  position: [number, number, number];
+   258→   258→}) {
+   259→   259→  const fallbackMat = useMemo(
+   260→   260→    () => new THREE.MeshStandardMaterial({
+   261→   261→      color: fallbackColor,
+   262→   262→      side: THREE.DoubleSide,
+   263→   263→      transparent: true,
+   264→   264→      alphaTest: 1e-5,
+   265→   265→    }),
+   266→   266→    [fallbackColor],
+   267→   267→  );
+   268→   268→
+   269→   269→  return (
+   270→   270→    <>
+   271→   271→      {/* Base: always-visible solid Steve-colored body */}
+   272→   272→      <mesh
+   273→   273→        geometry={geometry}
+   274→   274→        material={fallbackMat}
+   275→   275→        position={position}
+   276→   276→      />
+   277→   277→      {/* Skin texture overlay when available */}
+   278→   278→      {skinMaterial && (
+   279→   279→        <mesh
+   280→   280→          geometry={geometry}
+   281→   281→          material={skinMaterial}
+   282→   282→          position={position}
+   283→   283→        />
+   284→   284→      )}
+   285→   285→    </>
+   286→   286→  );
+   287→   287→}
+   288→   288→
+   289→   289→// ═══════════════════════════════════════════════════════════════
+   290→   290→// Sub-Component: OverlayPart
+   291→   291→// Renders the outer skin layer (+0.5px on each dimension)
+   292→   292→// Only visible when a skin texture is loaded
+   293→   293→// ═══════════════════════════════════════════════════════════════
+   294→   294→
+   295→   295→function OverlayPart({
+   296→   296→  geometry,
+   297→   297→  overlayMaterial,
+   298→   298→  position,
+   299→   299→}: {
+   300→   300→  geometry: THREE.BoxGeometry;
+   301→   301→  overlayMaterial: THREE.Material | null;
+   302→   302→  position: [number, number, number];
+   303→   303→}) {
+   304→   304→  if (!overlayMaterial) return null;
+   305→   305→
+   306→   306→  return (
+   307→   307→    <mesh
+   308→   308→      geometry={geometry}
+   309→   309→      material={overlayMaterial}
+   310→   310→      position={position}
+   311→   311→    />
+   312→   312→  );
+   313→   313→}
+   314→   314→
+   315→   315→// ═══════════════════════════════════════════════════════════════
+   316→   316→// Sub-Component: CapeMesh
+   317→   317→// Cape + Elytra rendering matching minecraft-skin-viewer
+   318→   318→// ═══════════════════════════════════════════════════════════════
+   319→   319→
+   320→   320→function CapeMesh() {
+   321→   321→  const capeRef = useRef<THREE.Mesh>(null);
+   322→   322→  const elytraLeftRef = useRef<THREE.Mesh>(null);
+   323→   323→  const elytraRightRef = useRef<THREE.Mesh>(null);
+   324→   324→  const textureRef = useRef<THREE.Texture | null>(null);
+   325→   325→  const materialRef = useRef<THREE.MeshStandardMaterial | null>(null);
+   326→   326→  const prevURLRef = useRef<string | null>(null);
+   327→   327→
+   328→   328→  const canvasDataURL = useCapeEditorStore((s) => s.canvasDataURL);
+   329→   329→  const mode = useCapeEditorStore((s) => s.mode);
+   330→   330→
+   331→   331→  // Cape geometry: 10×16×1 — positioned like minecraft-skin-viewer
+   332→   332→  // translate(0, -2.5, 3.5) then rotateX(-0.15) then rotateY(PI)
+   333→   333→  const capeGeo = useMemo(() => {
+   334→   334→    const geo = createUVBox(10, 16, 1, UV_CAPE, CAPE_TEX_W, CAPE_TEX_H);
+   335→   335→    // Match minecraft-skin-viewer: translate so the cape hangs below the attachment point
+   336→   336→    geo.translate(0, -2.5, 3.5);
+   337→   337→    // Slight backward tilt like a hanging cape
+   338→   338→    geo.rotateX(-0.15);
+   339→   339→    // Flip to face backward
+   340→   340→    geo.rotateY(Math.PI);
+   341→   341→    return geo;
+   342→   342→  }, []);
+   343→   343→
+   344→   344→  // Elytra wing geometries — matching minecraft-skin-viewer
+   345→   345→  const elytraLeftGeo = useMemo(() => {
+   346→   346→    const geo = createUVBox(12, 22, 4, UV_ELYTRA, CAPE_TEX_W, CAPE_TEX_H);
+   347→   347→    // Match minecraft-skin-viewer: translate(2, -7, -4) then rotate
+   348→   348→    geo.translate(2, -7, -4);
+   349→   349→    geo.rotateX(0.2617994);  // π/12 = 15°
+   350→   350→    geo.rotateZ(0.2617994);  // π/12 = 15°
+   351→   351→    return geo;
+   352→   352→  }, []);
+   353→   353→
+   354→   354→  const elytraRightGeo = useMemo(() => {
+   355→   355→    const geo = createUVBox(12, 22, 4, UV_ELYTRA, CAPE_TEX_W, CAPE_TEX_H);
+   356→   356→    // Match minecraft-skin-viewer: scale(-1,1,1), translate(-2, -7, -4) then rotate
+   357→   357→    geo.scale(-1, 1, 1);
+   358→   358→    geo.translate(-2, -7, -4);
+   359→   359→    geo.rotateX(0.2617994);   // π/12 = 15°
+   360→   360→    geo.rotateZ(-0.2617994);  // -π/12 = -15°
+   361→   361→    return geo;
+   362→   362→  }, []);
+   363→   363→
+   364→   364→  // Texture loading effect
+   365→   365→  useEffect(() => {
+   366→   366→    if (canvasDataURL === prevURLRef.current) return;
+   367→   367→    prevURLRef.current = canvasDataURL;
+   368→   368→
+   369→   369→    if (textureRef.current) {
+   370→   370→      textureRef.current.dispose();
+   371→   371→      textureRef.current = null;
+   372→   372→    }
+   373→   373→
+   374→   374→    if (!canvasDataURL) {
+   375→   375→      if (materialRef.current) {
+   376→   376→        materialRef.current.map = null;
+   377→   377→        materialRef.current.needsUpdate = true;
+   378→   378→      }
+   379→   379→      if (capeRef.current) capeRef.current.visible = false;
+   380→   380→      if (elytraLeftRef.current) elytraLeftRef.current.visible = false;
+   381→   381→      if (elytraRightRef.current) elytraRightRef.current.visible = false;
+   382→   382→      return;
+   383→   383→    }
+   384→   384→
+   385→   385→    const loader = new THREE.TextureLoader();
+   386→   386→    loader.load(canvasDataURL, (texture) => {
+   387→   387→      texture.magFilter = THREE.NearestFilter;
+   388→   388→      texture.minFilter = THREE.NearestFilter;
+   389→   389→      texture.generateMipmaps = false;
+   390→   390→      texture.colorSpace = THREE.SRGBColorSpace;
+   391→   391→
+   392→   392→      textureRef.current = texture;
+   393→   393→
+   394→   394→      if (!materialRef.current) {
+   395→   395→        materialRef.current = new THREE.MeshStandardMaterial({
+   396→   396→          map: texture,
+   397→   397→          transparent: true,
+   398→   398→          alphaTest: 1e-5,
+   399→   399→          side: THREE.DoubleSide,
+   400→   400→        });
+   401→   401→        if (capeRef.current) capeRef.current.material = materialRef.current;
+   402→   402→        if (elytraLeftRef.current) elytraLeftRef.current.material = materialRef.current;
+   403→   403→        if (elytraRightRef.current) elytraRightRef.current.material = materialRef.current;
+   404→   404→      } else {
+   405→   405→        materialRef.current.map = texture;
+   406→   406→        materialRef.current.needsUpdate = true;
+   407→   407→      }
+   408→   408→
+   409→   409→      const currentMode = useCapeEditorStore.getState().mode;
+   410→   410→      if (capeRef.current) capeRef.current.visible = currentMode === 'cape';
+   411→   411→      if (elytraLeftRef.current) elytraLeftRef.current.visible = currentMode === 'elytra';
+   412→   412→      if (elytraRightRef.current) elytraRightRef.current.visible = currentMode === 'elytra';
+   413→   413→    });
+   414→   414→  }, [canvasDataURL]);
+   415→   415→
+   416→   416→  // Update visibility when mode changes
+   417→   417→  useEffect(() => {
+   418→   418→    const hasTexture = !!textureRef.current;
+   419→   419→    if (capeRef.current) capeRef.current.visible = hasTexture && mode === 'cape';
+   420→   420→    if (elytraLeftRef.current) elytraLeftRef.current.visible = hasTexture && mode === 'elytra';
+   421→   421→    if (elytraRightRef.current) elytraRightRef.current.visible = hasTexture && mode === 'elytra';
+   422→   422→  }, [mode]);
+   423→   423→
+   424→   424→  // Cleanup on unmount
+   425→   425→  useEffect(() => {
+   426→   426→    return () => {
+   427→   427→      textureRef.current?.dispose();
+   428→   428→      materialRef.current?.dispose();
+   429→   429→    };
+   430→   430→  }, []);
+   431→   431→
+   432→   432→  return (
+   433→   433→    <>
+   434→   434→      {/* Cape: positioned via geometry translation/rotation like minecraft-skin-viewer */}
+   435→   435→      <mesh
+   436→   436→        ref={capeRef}
+   437→   437→        geometry={capeGeo}
+   438→   438→        visible={false}
+   439→   439→      />
+   440→   440→      {/* Elytra: left wing */}
+   441→   441→      <mesh
+   442→   442→        ref={elytraLeftRef}
+   443→   443→        geometry={elytraLeftGeo}
+   444→   444→        visible={false}
+   445→   445→      />
+   446→   446→      {/* Elytra: right wing (mirrored) */}
+   447→   447→      <mesh
+   448→   448→        ref={elytraRightRef}
+   449→   449→        geometry={elytraRightGeo}
+   450→   450→        visible={false}
+   451→   451→      />
+   452→   452→    </>
+   453→   453→  );
+   454→   454→}
+   455→   455→
+   456→   456→// ═══════════════════════════════════════════════════════════════
+   457→   457→// Sub-Component: PlayerModel
+   458→   458→// Matches MinecraftCapes/minecraft-skin-viewer rendering:
+   459→   459→// - Inner skin layer (always visible, Steve-colored fallback)
+   460→   460→// - Outer skin overlay layer (+0.5px, only with skin texture)
+   461→   461→// - Cape/Elytra attachment
+   462→   462→// ═══════════════════════════════════════════════════════════════
+   463→   463→
+   464→   464→function PlayerModel({ skinTexture }: { skinTexture: THREE.Texture | null }) {
+   465→   465→  // Inner skin layer geometries
+   466→   466→  const headGeo = useMemo(() => createUVBox(8, 8, 8, UV_HEAD), []);
+   467→   467→  const bodyGeo = useMemo(() => createUVBox(8, 12, 4, UV_BODY), []);
+   468→   468→  const rightArmGeo = useMemo(() => createUVBox(4, 12, 4, UV_RIGHT_ARM), []);
+   469→   469→  const leftArmGeo = useMemo(() => createUVBox(4, 12, 4, UV_LEFT_ARM), []);
+   470→   470→  const rightLegGeo = useMemo(() => createUVBox(4, 12, 4, UV_RIGHT_LEG), []);
+   471→   471→  const leftLegGeo = useMemo(() => createUVBox(4, 12, 4, UV_LEFT_LEG), []);
+   472→   472→
+   473→   473→  // Outer skin overlay geometries (+0.5px on each dimension)
+   474→   474→  const headOverlayGeo = useMemo(() => createUVBox(8.5, 8.5, 8.5, UV_HEAD_OVERLAY), []);
+   475→   475→  const bodyOverlayGeo = useMemo(() => createUVBox(8.5, 12.5, 4.5, UV_BODY_OVERLAY), []);
+   476→   476→  const rightArmOverlayGeo = useMemo(() => createUVBox(4.5, 12.5, 4.5, UV_RIGHT_ARM_OVERLAY), []);
+   477→   477→  const leftArmOverlayGeo = useMemo(() => createUVBox(4.5, 12.5, 4.5, UV_LEFT_ARM_OVERLAY), []);
+   478→   478→  const rightLegOverlayGeo = useMemo(() => createUVBox(4.5, 12.5, 4.5, UV_RIGHT_LEG_OVERLAY), []);
+   479→   479→  const leftLegOverlayGeo = useMemo(() => createUVBox(4.5, 12.5, 4.5, UV_LEFT_LEG_OVERLAY), []);
+   480→   480→
+   481→   481→  // Inner skin material (front-side only, like minecraft-skin-viewer)
+   482→   482→  const skinMaterial = useMemo(() => {
+   483→   483→    if (!skinTexture) return null;
+   484→   484→    return new THREE.MeshStandardMaterial({
+   485→   485→      map: skinTexture,
+   486→   486→      transparent: true,
+   487→   487→      alphaTest: 1e-5,
+   488→   488→      side: THREE.FrontSide,
+   489→   489→    });
+   490→   490→  }, [skinTexture]);
+   491→   491→
+   492→   492→  // Outer overlay material (same texture, but renders the overlay UV regions)
+   493→   493→  const overlayMaterial = useMemo(() => {
+   494→   494→    if (!skinTexture) return null;
+   495→   495→    return new THREE.MeshStandardMaterial({
+   496→   496→      map: skinTexture,
+   497→   497→      transparent: true,
+   498→   498→      alphaTest: 1e-5,
+   499→   499→      side: THREE.DoubleSide,
+   500→   500→    });
+   501→   501→  }, [skinTexture]);
+   502→   502→
+   503→   503→  return (
+   504→   504→    <group scale={MODEL_SCALE}>
+   505→   505→      {/* Inner skin layer */}
+   506→   506→      <SkinPart geometry={headGeo} skinMaterial={skinMaterial} fallbackColor={STEVE_COLORS.head} position={POS_HEAD} />
+   507→   507→      <SkinPart geometry={bodyGeo} skinMaterial={skinMaterial} fallbackColor={STEVE_COLORS.body} position={POS_BODY} />
+   508→   508→      <SkinPart geometry={rightArmGeo} skinMaterial={skinMaterial} fallbackColor={STEVE_COLORS.rightArm} position={POS_RIGHT_ARM} />
+   509→   509→      <SkinPart geometry={leftArmGeo} skinMaterial={skinMaterial} fallbackColor={STEVE_COLORS.leftArm} position={POS_LEFT_ARM} />
+   510→   510→      <SkinPart geometry={rightLegGeo} skinMaterial={skinMaterial} fallbackColor={STEVE_COLORS.rightLeg} position={POS_RIGHT_LEG} />
+   511→   511→      <SkinPart geometry={leftLegGeo} skinMaterial={skinMaterial} fallbackColor={STEVE_COLORS.leftLeg} position={POS_LEFT_LEG} />
+   512→   512→
+   513→   513→      {/* Outer skin overlay layer (+0.5px, only with skin texture) */}
+   514→   514→      <OverlayPart geometry={headOverlayGeo} overlayMaterial={overlayMaterial} position={POS_HEAD} />
+   515→   515→      <OverlayPart geometry={bodyOverlayGeo} overlayMaterial={overlayMaterial} position={POS_BODY} />
+   516→   516→      <OverlayPart geometry={rightArmOverlayGeo} overlayMaterial={overlayMaterial} position={POS_RIGHT_ARM} />
+   517→   517→      <OverlayPart geometry={leftArmOverlayGeo} overlayMaterial={overlayMaterial} position={POS_LEFT_ARM} />
+   518→   518→      <OverlayPart geometry={rightLegOverlayGeo} overlayMaterial={overlayMaterial} position={POS_RIGHT_LEG} />
+   519→   519→      <OverlayPart geometry={leftLegOverlayGeo} overlayMaterial={overlayMaterial} position={POS_LEFT_LEG} />
+   520→   520→
+   521→   521→      {/* Cape / Elytra */}
+   522→   522→      <CapeMesh />
+   523→   523→    </group>
+   524→   524→  );
+   525→   525→}
+   526→   526→
+   527→   527→// ═══════════════════════════════════════════════════════════════
+   528→   528→// Sub-Component: AutoRotateControls
+   529→   529→// ═══════════════════════════════════════════════════════════════
+   530→   530→
+   531→   531→function AutoRotateControls() {
+   532→   532→  const controlsRef = useRef<React.ComponentRef<typeof OrbitControls>>(null);
+   533→   533→
+   534→   534→  useEffect(() => {
+   535→   535→    const controls = controlsRef.current;
+   536→   536→    if (!controls) return;
+   537→   537→
+   538→   538→    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+   539→   539→
+   540→   540→    const handleInteractionStart = () => {
+   541→   541→      controls.autoRotate = false;
+   542→   542→      if (timeoutId) clearTimeout(timeoutId);
+   543→   543→      timeoutId = setTimeout(() => {
+   544→   544→        controls.autoRotate = true;
+   545→   545→      }, 3000);
+   546→   546→    };
+   547→   547→
+   548→   548→    controls.addEventListener('start', handleInteractionStart);
+   549→   549→
+   550→   550→    return () => {
+   551→   551→      controls.removeEventListener('start', handleInteractionStart);
+   552→   552→      if (timeoutId) clearTimeout(timeoutId);
+   553→   553→    };
+   554→   554→  }, []);
+   555→   555→
+   556→   556→  return (
+   557→   557→    <OrbitControls
+   558→   558→      ref={controlsRef}
+   559→   559→      autoRotate
+   560→   560→      autoRotateSpeed={1.5}
+   561→   561→      enablePan={false}
+   562→   562→      minDistance={3}
+   563→   563→      maxDistance={12}
+   564→   564→      target={[0, 0, 0]}
+   565→   565→      maxPolarAngle={Math.PI * 0.85}
+   566→   566→      minPolarAngle={Math.PI * 0.05}
+   567→   567→    />
+   568→   568→  );
+   569→   569→}
+   570→   570→
+   571→   571→// ═══════════════════════════════════════════════════════════════
+   572→   572→// Sub-Component: Scene
+   573→   573→// ═══════════════════════════════════════════════════════════════
+   574→   574→
+   575→   575→function Scene({ skinTexture }: { skinTexture: THREE.Texture | null }) {
+   576→   576→  return (
+   577→   577→    <>
+   578→   578→      <color attach="background" args={['#78b9ff']} />
+   579→   579→      <fog attach="fog" args={['#78b9ff', 15, 30]} />
+   580→   580→
+   581→   581→      <ambientLight intensity={1.5} />
+   582→   582→      <directionalLight position={[5, 10, 5]} intensity={1.2} />
+   583→   583→      <directionalLight position={[-4, 6, -5]} intensity={0.8} />
+   584→   584→      <directionalLight position={[0, 5, -8]} intensity={1.0} />
+   585→   585→      <hemisphereLight args={['#b1e1ff', '#4a6741', 0.5]} />
+   586→   586→
+   587→   587→      <PlayerModel skinTexture={skinTexture} />
+   588→   588→
+   589→   589→      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -2.25, 0]}>
+   590→   590→        <circleGeometry args={[1.8, 32]} />
+   591→   591→        <meshBasicMaterial color="#000000" transparent opacity={0.12} depthWrite={false} />
+   592→   592→      </mesh>
+   593→   593→
+   594→   594→      <Grid
+   595→   595→        position={[0, -2.26, 0]}
+   596→   596→        cellSize={0.5}
+   597→   597→        cellThickness={0.5}
+   598→   598→        cellColor="#3d5a3d"
+   599→   599→        sectionSize={2}
+   600→   600→        sectionThickness={1}
+   601→   601→        sectionColor="#5a7a5a"
+   602→   602→        fadeDistance={12}
+   603→   603→        infiniteGrid
+   604→   604→        fadeStrength={1.5}
+   605→   605→      />
+   606→   606→
+   607→   607→      <AutoRotateControls />
+   608→   608→    </>
+   609→   609→  );
+   610→   610→}
+   611→   611→
+   612→   612→// ═══════════════════════════════════════════════════════════════
+   613→   613→// Main Component: CapePreview
+   614→   614→// ═══════════════════════════════════════════════════════════════
+   615→   615→
+   616→   616→export function CapePreview() {
+   617→   617→  const [skinTexture, setSkinTexture] = useState<THREE.Texture | null>(null);
+   618→   618→  const skinTextureRef = useRef<THREE.Texture | null>(null);
+   619→   619→
+   620→   620→  const [isLoadingSkin, setIsLoadingSkin] = useState(false);
+   621→   621→  const [inputName, setInputName] = useState('');
+   622→   622→  const [loadError, setLoadError] = useState('');
+   623→   623→  const [skinLoaded, setSkinLoaded] = useState(false);
+   624→   624→
+   625→   625→  const mode = useCapeEditorStore((s) => s.mode);
+   626→   626→  const setMode = useCapeEditorStore((s) => s.setMode);
+   627→   627→
+   628→   628→  const configurePixelTexture = useCallback((texture: THREE.Texture) => {
+   629→   629→    texture.magFilter = THREE.NearestFilter;
+   630→   630→    texture.minFilter = THREE.NearestFilter;
+   631→   631→    texture.generateMipmaps = false;
+   632→   632→    texture.colorSpace = THREE.SRGBColorSpace;
+   633→   633→  }, []);
+   634→   634→
+   635→   635→  const handleLoadSkin = useCallback(() => {
+   636→   636→    const name = inputName.trim();
+   637→   637→    if (!name) return;
+   638→   638→
+   639→   639→    setIsLoadingSkin(true);
+   640→   640→    setLoadError('');
+   641→   641→
+   642→   642→    const loader = new THREE.TextureLoader();
+   643→   643→    const url = `/api/crafatar?username=${encodeURIComponent(name)}&type=skin`;
+   644→   644→
+   645→   645→    loader.load(
+   646→   646→      url,
+   647→   647→      (texture) => {
+   648→   648→        configurePixelTexture(texture);
+   649→   649→        if (skinTextureRef.current) {
+   650→   650→          skinTextureRef.current.dispose();
+   651→   651→        }
+   652→   652→        skinTextureRef.current = texture;
+   653→   653→        setSkinTexture(texture);
+   654→   654→        setSkinLoaded(true);
+   655→   655→        setIsLoadingSkin(false);
+   656→   656→      },
+   657→   657→      undefined,
+   658→   658→      () => {
+   659→   659→        if (skinTextureRef.current) {
+   660→   660→          skinTextureRef.current.dispose();
+   661→   661→          skinTextureRef.current = null;
+   662→   662→        }
+   663→   663→        setSkinTexture(null);
+   664→   664→        setSkinLoaded(false);
+   665→   665→        setLoadError('Failed to load skin. Check the username and try again.');
+   666→   666→        setIsLoadingSkin(false);
+   667→   667→      },
+   668→   668→    );
+   669→   669→  }, [inputName, configurePixelTexture]);
+   670→   670→
+   671→   671→  useEffect(() => {
+   672→   672→    return () => {
+   673→   673→      skinTextureRef.current?.dispose();
+   674→   674→    };
+   675→   675→  }, []);
+   676→   676→
+   677→   677→  const handleClearSkin = useCallback(() => {
+   678→   678→    if (skinTextureRef.current) {
+   679→   679→      skinTextureRef.current.dispose();
+   680→   680→      skinTextureRef.current = null;
+   681→   681→    }
+   682→   682→    setSkinTexture(null);
+   683→   683→    setSkinLoaded(false);
+   684→   684→    setInputName('');
+   685→   685→  }, []);
+   686→   686→
+   687→   687→  const handleKeyDown = useCallback(
+   688→   688→    (e: React.KeyboardEvent) => {
+   689→   689→      if (e.key === 'Enter') handleLoadSkin();
+   690→   690→    },
+   691→   691→    [handleLoadSkin],
+   692→   692→  );
+   693→   693→
+   694→   694→  return (
+   695→   695→    <div className="relative min-h-0 flex-1 rounded-xl overflow-hidden shadow-lg border border-border bg-background">
+   696→   696→      {/* 3D Canvas */}
+   697→   697→      <Canvas
+   698→   698→        camera={{
+   699→   699→          position: [0, 0.5, 7],
+   700→   700→          fov: 50,
+   701→   701→          near: 0.1,
+   702→   702→          far: 100,
+   703→   703→        }}
+   704→   704→        dpr={[1, 2]}
+   705→   705→        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}
+   706→   706→        gl={{
+   707→   707→          antialias: true,
+   708→   708→          toneMapping: THREE.ACESFilmicToneMapping,
+   709→   709→          toneMappingExposure: 1.1,
+   710→   710→        }}
+   711→   711→      >
+   712→   712→        <Scene skinTexture={skinTexture} />
+   713→   713→      </Canvas>
+   714→   714→
+   715→   715→      {/* Overlay controls at top of 3D canvas */}
+   716→   716→      <div className="absolute top-2 left-2 right-2 flex items-start gap-2 pointer-events-none">
+   717→   717→        {/* Username input group */}
+   718→   718→        <div className="pointer-events-auto flex items-center gap-1 rounded-lg bg-black/60 backdrop-blur-sm px-2 py-1 border border-white/10">
+   719→   719→          <Input
+   720→   720→            placeholder="Username..."
+   721→   721→            value={inputName}
+   722→   722→            onChange={(e) => {
+   723→   723→              setInputName(e.target.value);
+   724→   724→              if (loadError) setLoadError('');
+   725→   725→            }}
+   726→   726→            onKeyDown={handleKeyDown}
+   727→   727→            disabled={isLoadingSkin}
+   728→   728→            aria-label="Minecraft username"
+   729→   729→            className="h-6 w-24 sm:w-32 border-0 bg-transparent text-xs text-white placeholder:text-zinc-400 focus-visible:ring-0 focus-visible:ring-offset-0 p-0 px-1"
+   730→   730→          />
+   731→   731→          <Button
+   732→   732→            onClick={handleLoadSkin}
+   733→   733→            disabled={isLoadingSkin || !inputName.trim()}
+   734→   734→            variant="ghost"
+   735→   735→            size="sm"
+   736→   736→            className="h-6 px-2 text-[10px] text-zinc-300 hover:text-white hover:bg-white/10"
+   737→   737→            aria-label="Load player skin"
+   738→   738→          >
+   739→   739→            {isLoadingSkin ? (
+   740→   740→              <Loader2 className="h-3 w-3 animate-spin" />
+   741→   741→            ) : (
+   742→   742→              'Load'
+   743→   743→            )}
+   744→   744→          </Button>
+   745→   745→          {skinLoaded && !isLoadingSkin && (
+   746→   746→            <Button
+   747→   747→              onClick={handleClearSkin}
+   748→   748→              variant="ghost"
+   749→   749→              size="icon"
+   750→   750→              className="h-5 w-5 text-zinc-400 hover:text-white hover:bg-white/10"
+   751→   751→              aria-label="Clear skin"
+   752→   752→              title="Clear loaded skin"
+   753→   753→            >
+   754→   754→              <X className="h-3 w-3" />
+   755→   755→            </Button>
+   756→   756→          )}
+   757→   757→        </div>
+   758→   758→
+   759→   759→        {/* Spacer */}
+   760→   760→        <div className="flex-1" />
+   761→   761→
+   762→   762→        {/* Cape/Elytra toggle */}
+   763→   763→        <div className="pointer-events-auto flex items-center gap-1 rounded-lg bg-black/60 backdrop-blur-sm px-1.5 py-1 border border-white/10">
+   764→   764→          <Button
+   765→   765→            variant="ghost"
+   766→   766→            size="sm"
+   767→   767→            onClick={() => setMode('cape')}
+   768→   768→            className={`h-6 px-2 text-[10px] ${mode === 'cape' ? 'bg-emerald-600 text-white hover:bg-emerald-500' : 'text-zinc-400 hover:text-white hover:bg-white/10'}`}
+   769→   769→          >
+   770→   770→            Cape
+   771→   771→          </Button>
+   772→   772→          <Button
+   773→   773→            variant="ghost"
+   774→   774→            size="sm"
+   775→   775→            onClick={() => setMode('elytra')}
+   776→   776→            className={`h-6 px-2 text-[10px] ${mode === 'elytra' ? 'bg-emerald-600 text-white hover:bg-emerald-500' : 'text-zinc-400 hover:text-white hover:bg-white/10'}`}
+   777→   777→          >
+   778→   778→            Elytra
+   779→   779→          </Button>
+   780→   780→        </div>
+   781→   781→      </div>
+   782→   782→
+   783→   783→      {/* Error message overlay */}
+   784→   784→      {loadError && (
+   785→   785→        <div className="absolute top-12 left-2 right-2">
+   786→   786→          <p className="text-[10px] text-red-300 bg-red-900/60 backdrop-blur-sm rounded px-2 py-1 border border-red-500/20">
+   787→   787→            {loadError}
+   788→   788→          </p>
+   789→   789→        </div>
+   790→   790→      )}
+   791→   791→
+   792→   792→      {/* Hint overlay at bottom */}
+   793→   793→      <div className="absolute bottom-2 left-0 right-0 text-center pointer-events-none">
+   794→   794→        <p className="text-[10px] text-white/50">
+   795→   795→          Drag to rotate · Scroll to zoom · Auto-rotates after 3s
+   796→   796→        </p>
+   797→   797→      </div>
+   798→   798→    </div>
+   799→   799→  );
+   800→   800→}
+   801→   801→
